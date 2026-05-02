@@ -1,0 +1,226 @@
+[
+  {
+    "name": "PsyDAO",
+    "tagline": "Funding psychedelic medicine research via decentralized governance",
+    "description": "DAO that funds research into psychedelic-assisted therapies for mental health conditions including depression, PTSD, anxiety, and grief. IP-NFT model lets token holders vote on which trials to fund.",
+    "focus_areas": ["depression", "anxiety", "PTSD", "grief", "mental health", "psychedelics", "therapy", "trauma"],
+    "research_stage": "Funding trials",
+    "chain": "Ethereum",
+    "token": "PSY",
+    "links": {
+      "website": "https://psydao.io",
+      "twitter": "@PsyDAO_"
+    },
+    "stage": "Active"
+  },
+  {
+    "name": "VitaDAO",
+    "tagline": "Decentralized funding for longevity and healthspan research",
+    "description": "One of the largest DeSci DAOs. Funds longevity research through IP-NFTs, covering aging, neurodegeneration, mental health, and metabolic disease. Has funded 20+ research projects.",
+    "focus_areas": ["longevity", "aging", "neurodegeneration", "mental health", "metabolic health", "sleep", "cognitive decline"],
+    "research_stage": "Active funding",
+    "chain": "Ethereum",
+    "token": "VITA",
+    "links": {
+      "website": "https://vitadao.com",
+      "twitter": "@vita_dao"
+    },
+    "stage": "Active"
+  },
+  {
+    "name": "Molecule",
+    "tagline": "The protocol powering DeSci — IP-NFTs for biomedical research",
+    "description": "The infrastructure layer for DeSci. Molecule's IP-NFT framework lets researchers tokenize their IP and raise funding from DAOs and individuals. Many mental health and biotech projects use Molecule.",
+    "focus_areas": ["biomedical", "drug discovery", "mental health", "rare disease", "IP", "research funding"],
+    "research_stage": "Protocol/Infrastructure",
+    "chain": "Ethereum",
+    "token": "MOLE",
+    "links": {
+      "website": "https://molecule.to",
+      "twitter": "@molecule_dao"
+    },
+    "stage": "Active"
+  },
+  {
+    "name": "ResearchHub",
+    "tagline": "GitHub for science — open peer review with token rewards",
+    "description": "Platform where scientists publish, review, and discuss research and earn ResearchCoin (RSC) for contributions. Covers all fields including psychology, neuroscience, and mental health.",
+    "focus_areas": ["open science", "peer review", "neuroscience", "psychology", "mental health", "nutrition", "all fields"],
+    "research_stage": "Platform",
+    "chain": "Ethereum",
+    "token": "RSC",
+    "links": {
+      "website": "https://researchhub.com",
+      "twitter": "@ResearchHub"
+    },
+    "stage": "Active"
+  },
+  {
+    "name": "LabDAO",
+    "tagline": "Open, tokenized infrastructure for biological research",
+    "description": "DAO building shared laboratory infrastructure and compute for life sciences. Enables researchers worldwide to access wet lab and computational tools without institutional barriers.",
+    "focus_areas": ["biology", "drug discovery", "biotech", "lab infrastructure", "computational biology", "neuroscience"],
+    "research_stage": "Infrastructure",
+    "chain": "Ethereum",
+    "token": "PLEX",
+    "links": {
+      "website": "https://labdao.xyz",
+      "twitter": "@lab_dao"
+    },
+    "stage": "Active"
+  },
+  {
+    "name": "AthenaDAO",
+    "tagline": "Decentralized funding for women's health research",
+    "description": "DAO focused on funding research into women's health — including reproductive health, hormonal conditions, postpartum depression, and mental health issues disproportionately affecting women.",
+    "focus_areas": ["women's health", "postpartum depression", "hormonal health", "reproductive health", "mental health", "anxiety"],
+    "research_stage": "Funding",
+    "chain": "Ethereum",
+    "token": "ATH",
+    "links": {
+      "website": "https://athenadao.co",
+      "twitter": "@AthenaDAO_"
+    },
+    "stage": "Active"
+  },
+  {
+    "name": "CryoDAO",
+    "tagline": "Funding cryonics and preservation science",
+    "description": "DAO funding scientific research into cryopreservation, revival technologies, and preservation of biological tissue. Relevant to grief and loss — exploring continuity of life beyond death.",
+    "focus_areas": ["cryonics", "preservation", "death", "grief", "longevity", "revival"],
+    "research_stage": "Early research funding",
+    "chain": "Ethereum",
+    "token": "CRYO",
+    "links": {
+      "website": "https://cryodao.org",
+      "twitter": "@CryoDAO"
+    },
+    "stage": "Active"
+  },
+  {
+    "name": "HairDAO",
+    "tagline": "Decentralized funding for hair loss research",
+    "description": "DAO funding alopecia and hair loss research. Hair loss has significant mental health and self-esteem impact — the DAO addresses both the biological and psychological dimensions.",
+    "focus_areas": ["hair loss", "alopecia", "self-esteem", "mental health", "dermatology", "body image"],
+    "research_stage": "Funding",
+    "chain": "Ethereum",
+    "token": "HAIR",
+    "links": {
+      "website": "https://hairdao.xyz",
+      "twitter": "@HairDAO_"
+    },
+    "stage": "Active"
+  },
+  {
+    "name": "ValleyDAO",
+    "tagline": "Funding synthetic biology for planetary and human health",
+    "description": "DAO funding synthetic biology research — including microbiome engineering, which has growing evidence for mental health benefits through the gut-brain axis.",
+    "focus_areas": ["synthetic biology", "microbiome", "gut health", "mental health", "nutrition", "depression"],
+    "research_stage": "Active funding",
+    "chain": "Ethereum",
+    "token": "GROW",
+    "links": {
+      "website": "https://valleydao.bio",
+      "twitter": "@ValleyDAO_"
+    },
+    "stage": "Active"
+  },
+  {
+    "name": "PoSciDonDAO",
+    "tagline": "Patient-driven funding for personalized medicine research",
+    "description": "DAO where patients fund and govern research into their own conditions. Covers chronic illness, mental health, and rare diseases — giving patients direct power over research direction.",
+    "focus_areas": ["personalized medicine", "chronic illness", "mental health", "rare disease", "patient advocacy", "depression"],
+    "research_stage": "Active",
+    "chain": "Polygon",
+    "token": "SCI",
+    "links": {
+      "website": "https://poscidondao.com",
+      "twitter": "@PoSciDonDAO"
+    },
+    "stage": "Active"
+  },
+  {
+    "name": "GenomicsDAO",
+    "tagline": "Patient-owned genomics for personalized health insights",
+    "description": "DAO where individuals own and control their genomic data, contributing to research on genetic factors in mental health, depression susceptibility, and treatment response.",
+    "focus_areas": ["genomics", "mental health", "depression", "personalized medicine", "data ownership", "genetics"],
+    "research_stage": "Platform",
+    "chain": "Ethereum",
+    "token": "GENE",
+    "links": {
+      "website": "https://genomicsdao.com",
+      "twitter": "@GenomicsDAO"
+    },
+    "stage": "Active"
+  },
+  {
+    "name": "DeSci World",
+    "tagline": "The directory and community hub for all DeSci projects",
+    "description": "Not a funder but the central hub for the DeSci ecosystem — lists projects, hosts events, publishes research news, and connects scientists with DAOs. Good entry point for anyone new to DeSci.",
+    "focus_areas": ["all fields", "ecosystem", "community", "education", "mental health", "longevity", "biotech"],
+    "research_stage": "Ecosystem",
+    "chain": "Multiple",
+    "token": null,
+    "links": {
+      "website": "https://desci.world",
+      "twitter": "@DeSciWorld"
+    },
+    "stage": "Active"
+  },
+  {
+    "name": "Opscientia",
+    "tagline": "Open science infrastructure for decentralized research",
+    "description": "Building open-source tools for scientific collaboration, data sharing, and reproducibility — including for neuroscience and mental health research.",
+    "focus_areas": ["open science", "neuroscience", "data sharing", "reproducibility", "mental health", "research tools"],
+    "research_stage": "Infrastructure",
+    "chain": "Ethereum",
+    "token": "OPSY",
+    "links": {
+      "website": "https://opsci.io",
+      "twitter": "@opscientia"
+    },
+    "stage": "Active"
+  },
+  {
+    "name": "Bio.xyz",
+    "tagline": "The launchpad for biotech DAOs and DeSci projects",
+    "description": "Platform for launching and funding biotech DAOs. Parent ecosystem to many DeSci projects. Provides infrastructure for tokenizing research IP and coordinating scientific communities.",
+    "focus_areas": ["biotech", "drug discovery", "longevity", "mental health", "genomics", "all biomedical fields"],
+    "research_stage": "Platform/Launchpad",
+    "chain": "Ethereum",
+    "token": "BIO",
+    "links": {
+      "website": "https://bio.xyz",
+      "twitter": "@bioxyz_"
+    },
+    "stage": "Active"
+  },
+  {
+    "name": "NeurodegenerationDAO",
+    "tagline": "Community-funded research into neurodegeneration",
+    "description": "DAO focusing on Alzheimer's, Parkinson's and related neurodegenerative diseases — which are deeply connected to depression, grief responses in caregivers, and cognitive mental health.",
+    "focus_areas": ["neurodegeneration", "Alzheimer's", "Parkinson's", "cognitive health", "caregiver grief", "mental health", "depression"],
+    "research_stage": "Early",
+    "chain": "Ethereum",
+    "token": null,
+    "links": {
+      "website": "https://neurodao.science",
+      "twitter": "@NeuroDAO_"
+    },
+    "stage": "Early"
+  },
+  {
+    "name": "GreenPill Network",
+    "tagline": "Regenerative crypto communities funding public goods",
+    "description": "Network of local and global chapters using crypto-coordination to fund public goods including mental health access, community wellbeing, and social connection initiatives.",
+    "focus_areas": ["mental health", "community", "social connection", "wellbeing", "public goods", "grief support"],
+    "research_stage": "Grants/Community",
+    "chain": "Multiple",
+    "token": null,
+    "links": {
+      "website": "https://greenpill.network",
+      "twitter": "@greenpillnet"
+    },
+    "stage": "Active"
+  }
+]
