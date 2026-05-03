@@ -99,19 +99,11 @@ def fetch_openalex(query: str, max_results: int = 5) -> list[dict]:
         'sexual behavior', 'ulcerative', 'glazed', 'lifecycle', 'assessment',
     ]
 
-    CORE_TERMS = [
-        'depression', 'anxiety', 'grief', 'mental health', 'mindfulness',
-        'therapy', 'wellbeing', 'psychiatric', 'psychological', 'loneliness',
-        'sleep disorder', 'bereavement', 'stress',
-    ]
-
     papers = []
     for work in results:
         title_raw = work.get("title") or ""
         title_lower = title_raw.lower()
         if any(term in title_lower for term in EXCLUDE_TERMS):
-            continue
-        if not any(term in title_lower for term in CORE_TERMS):
             continue
 
         abstract = reconstruct_abstract(work.get("abstract_inverted_index") or {})
@@ -499,7 +491,7 @@ def run():
     # OpenAlex (replaces PubMed + Semantic Scholar fetches)
     for query in sampled_queries:
         print(f"  OpenAlex: {query}")
-        papers = fetch_openalex(query, max_results=3)
+        papers = fetch_openalex(query, max_results=5)
         all_papers.extend(papers)
         time.sleep(1.0)  # OpenAlex polite crawling
 
