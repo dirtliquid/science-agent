@@ -95,6 +95,14 @@ def fetch_openalex(query: str, max_results: int = 5) -> list[dict]:
         'osteoarthritis', 'outdoor', 'climate', 'cardiovascular',
         'wearable', 'teacher', 'school', 'pediatric', 'infant',
         'pregnancy', 'obstetric',
+        'window', 'colitis', 'copd', 'lung', 'pornograph',
+        'sexual behavior', 'ulcerative', 'glazed', 'lifecycle', 'assessment',
+    ]
+
+    CORE_TERMS = [
+        'depression', 'anxiety', 'grief', 'mental health', 'mindfulness',
+        'therapy', 'wellbeing', 'psychiatric', 'psychological', 'loneliness',
+        'sleep disorder', 'bereavement', 'stress',
     ]
 
     papers = []
@@ -102,6 +110,8 @@ def fetch_openalex(query: str, max_results: int = 5) -> list[dict]:
         title_raw = work.get("title") or ""
         title_lower = title_raw.lower()
         if any(term in title_lower for term in EXCLUDE_TERMS):
+            continue
+        if not any(term in title_lower for term in CORE_TERMS):
             continue
 
         abstract = reconstruct_abstract(work.get("abstract_inverted_index") or {})
