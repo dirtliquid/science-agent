@@ -92,6 +92,9 @@ def fetch_openalex(query: str, max_results: int = 5) -> list[dict]:
     EXCLUDE_TERMS = [
         'tumor', 'cancer', 'oncology', 'neonatal',
         'latin', 'virgil', 'aeneid', 'surgery', 'cardiac',
+        'osteoarthritis', 'outdoor', 'climate', 'cardiovascular',
+        'wearable', 'teacher', 'school', 'pediatric', 'infant',
+        'pregnancy', 'obstetric',
     ]
 
     papers = []
@@ -232,49 +235,7 @@ def enrich_legitimacy(paper: dict) -> dict:
     h_index        = None
     altmetric_score = None
 
-    # ── Semantic Scholar: citation count + first-author H-index ──
-    try:
-        r = requests.get(
-            SEMANTIC_SCHOLAR_URL,
-            params={
-                "query": title,
-                "limit": 1,
-                "fields": "citationCount,authors",
-            },
-            timeout=10,
-        )
-        if r.status_code == 429:
-            print(f"  Semantic Scholar 429 — rate limited, sleeping 5s and skipping")
-            time.sleep(5.0)
-        else:
-            r.raise_for_status()
-            data = r.json().get("data", [])
-
-            if data:
-                ss_paper = data[0]
-                if ss_paper.get("citationCount") is not None:
-                    paper["citations"] = ss_paper["citationCount"]
-
-                authors = ss_paper.get("authors", [])
-                if authors:
-                    author_id = authors[0].get("authorId")
-                    if author_id:
-                        ar = requests.get(
-                            f"https://api.semanticscholar.org/graph/v1/author/{author_id}",
-                            params={"fields": "hIndex"},
-                            timeout=10,
-                        )
-                        if ar.status_code == 429:
-                            print(f"  Semantic Scholar author 429 — rate limited, sleeping 5s and skipping")
-                            time.sleep(5.0)
-                        else:
-                            ar.raise_for_status()
-                            h_index = ar.json().get("hIndex")
-                            time.sleep(2.0)
-
-            time.sleep(2.0)
-    except Exception as e:
-        print(f"  Semantic Scholar enrichment error: {e}")
+    # ── Semantic Scholar: disabled — re-enable once we have an API key ──
 
     # ── Altmetric: attention score ──
     if doi:
