@@ -97,6 +97,8 @@ def fetch_openalex(query: str, max_results: int = 5) -> list[dict]:
         'pregnancy', 'obstetric',
         'window', 'colitis', 'copd', 'lung', 'pornograph',
         'sexual behavior', 'ulcerative', 'glazed', 'lifecycle', 'assessment',
+        'bowel', 'digestive', 'colonic', 'intestinal', 'gastro',
+        'nursing education', 'reproductive',
     ]
 
     papers = []
@@ -415,7 +417,7 @@ def send_telegram(digest: dict, bot_token: str, chat_id: str):
         "disable_web_page_preview": False,
     }
     try:
-        r = requests.post(url, json=payload, timeout=10)
+        r = requests.post(url, json=payload, timeout=30)
         if r.status_code == 200:
             print(f"  ✅ Sent to Telegram: {p['title'][:60]}...")
         else:
@@ -461,7 +463,7 @@ def send_discord(digest: dict, webhook_url: str):
         "url":         p["url"],
     }
     try:
-        r = requests.post(webhook_url, json={"embeds": [embed]}, timeout=10)
+        r = requests.post(webhook_url, json={"embeds": [embed]}, timeout=30)
         if r.status_code in (200, 204):
             print(f"  ✅ Sent to Discord: {p['title'][:60]}...")
         else:
