@@ -1,7 +1,7 @@
 """
 Mental Health Science Agent
 Fetches latest research findings → AI digests → DeSci project match → Social-ready posts
-Sources: PubMed, Semantic Scholar, ScienceDaily RSS
+Sources: OpenAlex, medRxiv, ScienceDaily RSS
 Output: Telegram message + Discord embed + saved JSON
 """
 
@@ -19,10 +19,10 @@ from desci_matcher import match_desci_projects, format_desci_section_telegram, f
 
 # ─── SOURCES ────────────────────────────────────────────────────────────────
 
-PUBMED_SEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
-PUBMED_FETCH_URL  = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
-PUBMED_SUMMARY_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
+OPENALEX_URL        = "https://api.openalex.org/works"
+MEDRXIV_API_URL     = "https://api.biorxiv.org/details/medrxiv"
 SEMANTIC_SCHOLAR_URL = "https://api.semanticscholar.org/graph/v1/paper/search"
+ALTMETRIC_URL       = "https://api.altmetric.com/v1/doi"
 
 SEARCH_QUERIES = [
     # Depression - food/diet
@@ -46,88 +46,137 @@ SCIENCEDAILY_FEEDS = [
     "https://www.sciencedaily.com/rss/mind_brain/mental_health.xml",
 ]
 
+# Keywords used to filter medRxiv preprints
+MEDRXIV_KEYWORDS = [
+    "depression", "anxiety", "grief", "mental health", "mindfulness",
+    "psychotherapy", "loneliness", "sleep disorder", "psychiatric",
+]
 
-# ─── FETCH: PUBMED ───────────────────────────────────────────────────────────
 
-def fetch_pubmed(query: str, max_results: int = 3) -> list[dict]:
-    """Search PubMed and return paper metadata + abstracts."""
-    two_years_ago = (datetime.now() - timedelta(days=730)).strftime("%Y/%m/%d")
+# ─── FETCH: OPENALEX ─────────────────────────────────────────────────────────
 
-    # Step 1: Search for IDs
-    search_params = {
-        "db": "pubmed",
-        "term": query,
-        "retmax": max_results,
-        "sort": "date",
-        "mindate": two_years_ago,
-        "datetype": "pdat",
-        "retmode": "json",
+def reconstruct_abstract(inverted_index: dict) -> str:
+    """Reconstruct plain text from OpenAlex inverted-index abstract format."""
+    if not inverted_index:
+        return ""
+    positions: dict[int, str] = {}
+    for word, pos_list in inverted_index.items():
+        for pos in pos_list:
+            positions[pos] = word
+    return " ".join(positions[i] for i in sorted(positions))
+
+
+def _openalex_fetch_type(query: str, work_type: str, cutoff: str, max_results: int) -> list:
+    """Single OpenAlex request for one work type."""
+    params = {
+        "search": query,
+        "filter": f"publication_date:>{cutoff},type:{work_type}",
+        "per-page": max_results,
+        "sort": "cited_by_count:desc",
+        "select": "id,title,abstract_inverted_index,publication_date,doi,primary_location,cited_by_count,type",
     }
+    headers = {"User-Agent": "SciSignal/1.0 (mailto:contact@scisignal.app)"}
+
     try:
-        r = requests.get(PUBMED_SEARCH_URL, params=search_params, timeout=10)
-        ids = r.json().get("esearchresult", {}).get("idlist", [])
+        r = requests.get(OPENALEX_URL, params=params, headers=headers, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+        results = data.get("results", [])
+        if not results:
+            print(f"  OpenAlex 0 results for type={work_type} query='{query[:40]}'")
+            print(f"  Full response: {json.dumps(data, indent=2)[:1000]}")
+        return results
     except Exception as e:
-        print(f"  PubMed search error: {e}")
+        print(f"  OpenAlex error (type={work_type}, query='{query[:40]}'): {e}")
         return []
 
-    if not ids:
-        return []
 
-    # Step 2: Fetch abstracts
-    fetch_params = {
-        "db": "pubmed",
-        "id": ",".join(ids),
-        "rettype": "abstract",
-        "retmode": "xml",
-    }
-    try:
-        r = requests.get(PUBMED_FETCH_URL, params=fetch_params, timeout=15)
-        xml = r.text
-    except Exception as e:
-        print(f"  PubMed fetch error: {e}")
-        return []
+def fetch_openalex(query: str, max_results: int = 5) -> list[dict]:
+    """Fetch recent journal articles and preprints from OpenAlex by keyword."""
+    cutoff = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")
 
-    # Step 3: Also get titles + years via summary
-    summary_params = {
-        "db": "pubmed",
-        "id": ",".join(ids),
-        "retmode": "json",
-    }
-    titles_map = {}
-    years_map = {}
-    try:
-        sr = requests.get(PUBMED_SUMMARY_URL, params=summary_params, timeout=10)
-        result = sr.json().get("result", {})
-        for pid in ids:
-            entry = result.get(pid, {})
-            titles_map[pid] = entry.get("title", "")
-            years_map[pid] = entry.get("pubdate", "")[:4]
-    except:
-        pass
+    journal_results  = _openalex_fetch_type(query, "journal-article", cutoff, max_results)
+    time.sleep(0.5)
+    preprint_results = _openalex_fetch_type(query, "preprint", cutoff, max_results)
 
-    # Step 4: Parse abstracts from XML (simple extraction)
+    results = journal_results + preprint_results
     papers = []
-    import re
-    abstract_blocks = re.findall(
-        r'<PubmedArticle>(.*?)</PubmedArticle>', xml, re.DOTALL
-    )
-    for i, (pid, block) in enumerate(zip(ids, abstract_blocks)):
-        abstract_match = re.search(
-            r'<AbstractText[^>]*>(.*?)</AbstractText>', block, re.DOTALL
-        )
-        abstract = abstract_match.group(1) if abstract_match else ""
-        abstract = re.sub(r'<[^>]+>', '', abstract).strip()
+    for work in results:
+        abstract = reconstruct_abstract(work.get("abstract_inverted_index") or {})
+        if len(abstract) < 100:
+            continue
 
-        if abstract and len(abstract) > 100:
-            papers.append({
-                "source": "PubMed",
-                "id": pid,
-                "title": titles_map.get(pid, f"Study #{pid}"),
-                "abstract": abstract[:3000],
-                "year": years_map.get(pid, ""),
-                "url": f"https://pubmed.ncbi.nlm.nih.gov/{pid}/",
-                "query": query,
-            })
+        doi_raw = work.get("doi") or ""
+        doi = doi_raw.replace("https://doi.org/", "").strip() or None
+
+        primary = work.get("primary_location") or {}
+        url = primary.get("landing_page_url") or (f"https://doi.org/{doi}" if doi else "")
+
+        pub_date = work.get("publication_date") or ""
+        papers.append({
+            "source": "OpenAlex",
+            "id": (work.get("id") or "").split("/")[-1],
+            "title": work.get("title") or "",
+            "abstract": abstract[:3000],
+            "year": pub_date[:4],
+            "url": url,
+            "doi": doi,
+            "citations": work.get("cited_by_count") or 0,
+            "query": query,
+        })
+
+    return papers
+
+
+# ─── FETCH: MEDRXIV ──────────────────────────────────────────────────────────
+
+def fetch_medrxiv(max_results: int = 20) -> list[dict]:
+    """Fetch recent medRxiv preprints and filter by relevance keywords."""
+    from_date = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")
+    to_date   = datetime.now().strftime("%Y-%m-%d")
+
+    try:
+        r = requests.get(
+            f"{MEDRXIV_API_URL}/{from_date}/{to_date}/0",
+            timeout=15,
+        )
+        r.raise_for_status()
+        collection = r.json().get("collection", [])
+    except Exception as e:
+        print(f"  medRxiv error: {e}")
+        return []
+
+    kw_lower = [k.lower() for k in MEDRXIV_KEYWORDS]
+    papers = []
+
+    for item in collection:
+        title    = item.get("title", "")
+        abstract = item.get("abstract", "")
+        text     = (title + " " + abstract).lower()
+
+        if not any(kw in text for kw in kw_lower):
+            continue
+        if len(abstract) < 100:
+            continue
+
+        doi = item.get("doi", "") or ""
+        uid = hashlib.md5(doi.encode() if doi else title.encode()).hexdigest()[:10]
+
+        papers.append({
+            "source": "medRxiv",
+            "id": uid,
+            "title": title,
+            "abstract": abstract[:3000],
+            "year": (item.get("date") or "")[:4],
+            "url": f"https://doi.org/{doi}" if doi else "",
+            "doi": doi or None,
+            "citations": 0,
+            "query": "medrxiv",
+        })
+
+        if len(papers) >= max_results:
+            break
+
     return papers
 
 
@@ -135,6 +184,7 @@ def fetch_pubmed(query: str, max_results: int = 3) -> list[dict]:
 
 def fetch_sciencedaily() -> list[dict]:
     """Fetch recent plain-English science summaries from ScienceDaily RSS."""
+    import re
     articles = []
     cutoff = datetime.now() - timedelta(days=CONFIG["lookback_days"])
 
@@ -142,12 +192,14 @@ def fetch_sciencedaily() -> list[dict]:
         try:
             feed = feedparser.parse(feed_url)
             for entry in feed.entries[:5]:
-                pub_date = datetime(*entry.published_parsed[:6]) if hasattr(entry, 'published_parsed') and entry.published_parsed else datetime.now()
+                pub_date = (
+                    datetime(*entry.published_parsed[:6])
+                    if hasattr(entry, "published_parsed") and entry.published_parsed
+                    else datetime.now()
+                )
                 if pub_date < cutoff:
                     continue
-                summary = entry.get("summary", "")
-                import re
-                summary = re.sub(r'<[^>]+>', '', summary).strip()
+                summary = re.sub(r"<[^>]+>", "", entry.get("summary", "")).strip()
                 if summary and len(summary) > 80:
                     articles.append({
                         "source": "ScienceDaily",
@@ -156,6 +208,8 @@ def fetch_sciencedaily() -> list[dict]:
                         "abstract": summary[:2000],
                         "year": str(pub_date.year),
                         "url": entry.link,
+                        "doi": None,
+                        "citations": 0,
                         "query": feed_url.split("/")[-1].replace(".xml", ""),
                     })
         except Exception as e:
@@ -164,46 +218,76 @@ def fetch_sciencedaily() -> list[dict]:
     return articles
 
 
-# ─── FETCH: SEMANTIC SCHOLAR ─────────────────────────────────────────────────
+# ─── LEGITIMACY ENRICHMENT ───────────────────────────────────────────────────
 
-def fetch_semantic_scholar(query: str, max_results: int = 2) -> list[dict]:
-    """Fetch highly-cited recent papers from Semantic Scholar."""
-    params = {
-        "query": query,
-        "limit": max_results,
-        "fields": "title,abstract,year,citationCount,externalIds,url",
-        "publicationDateOrYear": f"{datetime.now().year - 2}-",
-    }
+def enrich_legitimacy(paper: dict) -> dict:
+    """
+    Enrich a paper dict with:
+      - h_index: first-author H-index from Semantic Scholar
+      - altmetric_score: Altmetric attention score (requires DOI)
+    Citation count is updated in-place if Semantic Scholar finds the paper.
+    """
+    title = paper.get("title", "")
+    doi   = paper.get("doi")
+
+    h_index        = None
+    altmetric_score = None
+
+    # ── Semantic Scholar: citation count + first-author H-index ──
     try:
-        r = requests.get(SEMANTIC_SCHOLAR_URL, params=params, timeout=10)
+        r = requests.get(
+            SEMANTIC_SCHOLAR_URL,
+            params={
+                "query": title,
+                "limit": 1,
+                "fields": "citationCount,authors",
+            },
+            timeout=10,
+        )
+        r.raise_for_status()
         data = r.json().get("data", [])
-    except Exception as e:
-        print(f"  Semantic Scholar error: {e}")
-        return []
 
-    papers = []
-    for p in data:
-        abstract = p.get("abstract") or ""
-        if not abstract or len(abstract) < 100:
-            continue
-        pid = p.get("externalIds", {}).get("PubMed", p.get("paperId", ""))
-        papers.append({
-            "source": "SemanticScholar",
-            "id": str(pid),
-            "title": p.get("title", ""),
-            "abstract": abstract[:3000],
-            "year": str(p.get("year", "")),
-            "url": p.get("url", ""),
-            "citations": p.get("citationCount", 0),
-            "query": query,
-        })
-    return papers
+        if data:
+            ss_paper = data[0]
+            if ss_paper.get("citationCount") is not None:
+                paper["citations"] = ss_paper["citationCount"]
+
+            authors = ss_paper.get("authors", [])
+            if authors:
+                author_id = authors[0].get("authorId")
+                if author_id:
+                    ar = requests.get(
+                        f"https://api.semanticscholar.org/graph/v1/author/{author_id}",
+                        params={"fields": "hIndex"},
+                        timeout=10,
+                    )
+                    ar.raise_for_status()
+                    h_index = ar.json().get("hIndex")
+                    time.sleep(0.4)
+
+        time.sleep(0.5)
+    except Exception as e:
+        print(f"  Semantic Scholar enrichment error: {e}")
+
+    # ── Altmetric: attention score ──
+    if doi:
+        try:
+            r = requests.get(f"{ALTMETRIC_URL}/{doi}", timeout=10)
+            if r.status_code == 200:
+                altmetric_score = r.json().get("score")
+            time.sleep(0.3)
+        except Exception as e:
+            print(f"  Altmetric error ({doi}): {e}")
+
+    paper["h_index"]         = h_index
+    paper["altmetric_score"] = altmetric_score
+    return paper
 
 
 # ─── AI DIGEST ───────────────────────────────────────────────────────────────
 
 DIGEST_SYSTEM_PROMPT = """You are a science communicator who specializes in mental health research.
-Your job is to read dense academic abstracts and extract the ONE most interesting, actionable finding — 
+Your job is to read dense academic abstracts and extract the ONE most interesting, actionable finding —
 then rewrite it in two formats: one for a curious non-scientist, one for social media.
 
 Always be accurate. Never exaggerate. If the evidence is weak (small sample, preliminary), say so briefly.
@@ -211,12 +295,25 @@ If the study found NO significant effect, that's also interesting — report it 
 
 Respond ONLY in valid JSON. No markdown, no backticks, no preamble."""
 
-DIGEST_USER_PROMPT = """Here is a scientific paper abstract. Extract and rewrite the key finding.
+DIGEST_USER_PROMPT = """Here is a scientific paper with legitimacy signals. Extract the key finding and score it.
 
 TITLE: {title}
 SOURCE: {source} ({year})
 ABSTRACT:
 {abstract}
+
+LEGITIMACY SIGNALS:
+- First-author H-index: {h_index}
+- Citation count: {citations}
+- Altmetric attention score: {altmetric_score}
+
+Apply these scoring adjustments to your relevance_score:
+  +1 if H-index > 20
+  +1 if citation count > 5
+  +2 if Altmetric score > 50
+  -5 if this is a study protocol (pre-registered plan, no results yet)
+  -2 if sample size n < 30 participants
+Base your score on scientific quality and actionability (1–10), then apply adjustments, clamping the final value between 1 and 10.
 
 Respond with this exact JSON structure:
 {{
@@ -225,9 +322,9 @@ Respond with this exact JSON structure:
   "why_it_matters": "1 sentence. Why should a non-scientist care about this?",
   "actionable_tip": "1 sentence starting with a verb. What can someone actually DO with this info?",
   "evidence_strength": one of ["Strong (RCT/Meta-analysis)", "Moderate (Clinical study)", "Preliminary (Small/Observational)"],
-  "social_caption": "A punchy, engaging 2-3 sentence social media caption. No hashtags yet. No emojis unless they add meaning. Start with the hook — the most surprising or relatable part of the finding.",
+  "social_caption": "A punchy, engaging 2-3 sentence social media caption. No hashtags yet. No emojis unless they add meaning. Start with the hook.",
   "hashtags": ["list", "of", "5-8", "relevant", "hashtags", "without", "the", "#"],
-  "relevance_score": integer 1-10 where 10 = groundbreaking actionable finding, 1 = vague/irrelevant,
+  "relevance_score": integer 1-10 after adjustments,
   "skip_reason": "If relevance_score < 6, briefly explain why. Otherwise empty string."
 }}"""
 
@@ -235,10 +332,13 @@ Respond with this exact JSON structure:
 def digest_paper(paper: dict) -> Optional[dict]:
     """Send paper to OpenRouter for digestion into social-ready content."""
     prompt = DIGEST_USER_PROMPT.format(
-        title=paper["title"],
-        source=paper["source"],
-        year=paper.get("year", "n/d"),
-        abstract=paper["abstract"],
+        title          = paper["title"],
+        source         = paper["source"],
+        year           = paper.get("year", "n/d"),
+        abstract       = paper["abstract"],
+        h_index        = paper.get("h_index") if paper.get("h_index") is not None else "unknown",
+        citations      = paper.get("citations", 0),
+        altmetric_score = paper.get("altmetric_score") if paper.get("altmetric_score") is not None else "not indexed",
     )
 
     try:
@@ -252,20 +352,25 @@ def digest_paper(paper: dict) -> Optional[dict]:
                 "model": "meta-llama/llama-3.3-70b-instruct",
                 "messages": [
                     {"role": "system", "content": DIGEST_SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
+                    {"role": "user",   "content": prompt},
                 ],
             },
             timeout=30,
         )
-        raw = response.json()["choices"][0]["message"]["content"].strip()
+        resp_json = response.json()
+        if "choices" not in resp_json:
+            print(f"  OpenRouter missing 'choices' key. Full response: {json.dumps(resp_json, indent=2)}")
+            return None
+        raw = resp_json["choices"][0]["message"]["content"].strip()
         raw = raw.replace("```json", "").replace("```", "").strip()
         digest = json.loads(raw)
         digest["paper"] = {
-            "title": paper["title"],
-            "source": paper["source"],
-            "url": paper["url"],
-            "year": paper.get("year", ""),
-            "citations": paper.get("citations", None),
+            "title"    : paper["title"],
+            "source"   : paper["source"],
+            "url"      : paper["url"],
+            "year"     : paper.get("year", ""),
+            "citations": paper.get("citations"),
+            "doi"      : paper.get("doi"),
         }
         return digest
     except Exception as e:
@@ -312,12 +417,10 @@ def send_telegram(digest: dict, bot_token: str, chat_id: str):
 
     hashtags = " ".join(f"#{html_escape(h)}" for h in d.get("hashtags", []))
 
-    # DeSci section (injected if matches exist)
     desci_section = ""
     if d.get("desci"):
         desci_section = format_desci_section_telegram(d["desci"])
 
-    # Add DeSci hashtags if matches found
     desci_tags = ""
     if d.get("desci", {}).get("matches"):
         desci_tags = "#DeSci #Web3Science #DecentralizedScience"
@@ -363,17 +466,15 @@ def send_discord(digest: dict, webhook_url: str):
         "App/Digital": "📱", "Substance": "💊", "Other": "📌",
     }.get(d.get("category", "Other"), "📌")
 
-    hashtags = " ".join(f"#{h}" for h in d.get("hashtags", []))
+    hashtags  = " ".join(f"#{h}" for h in d.get("hashtags", []))
     desci_tags = "#DeSci #Web3Science" if d.get("desci", {}).get("matches") else ""
 
-    # Base fields
     fields = [
-        {"name": "💡 Actionable Tip", "value": d.get("actionable_tip", ""), "inline": False},
+        {"name": "💡 Actionable Tip",    "value": d.get("actionable_tip", ""),    "inline": False},
         {"name": "📊 Evidence Strength", "value": d.get("evidence_strength", ""), "inline": True},
-        {"name": "🏷️ Hashtags", "value": f"{hashtags} {desci_tags}".strip(), "inline": False},
+        {"name": "🏷️ Hashtags",          "value": f"{hashtags} {desci_tags}".strip(), "inline": False},
     ]
 
-    # Add DeSci fields if matches exist
     if d.get("desci"):
         desci_fields = format_desci_section_discord(d["desci"])
         if desci_fields:
@@ -381,16 +482,15 @@ def send_discord(digest: dict, webhook_url: str):
             fields.extend(desci_fields)
 
     embed = {
-        "title": f"{category_emoji} {d.get('category', 'Research')} | {p['source']} {p['year']}",
+        "title":       f"{category_emoji} {d.get('category', 'Research')} | {p['source']} {p['year']}",
         "description": d.get("social_caption", ""),
-        "color": 0x00C9A7,  # teal — DeSci vibes
-        "fields": fields,
-        "footer": {"text": p["title"][:100]},
-        "url": p["url"],
+        "color":       0x00C9A7,
+        "fields":      fields,
+        "footer":      {"text": p["title"][:100]},
+        "url":         p["url"],
     }
-    payload = {"embeds": [embed]}
     try:
-        r = requests.post(webhook_url, json=payload, timeout=10)
+        r = requests.post(webhook_url, json={"embeds": [embed]}, timeout=10)
         if r.status_code in (200, 204):
             print(f"  ✅ Sent to Discord: {p['title'][:60]}...")
         else:
@@ -406,29 +506,29 @@ def run():
     print(f"  Mental Health Science Agent — {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print(f"{'='*60}\n")
 
-    seen_path = "seen_ids.json"
+    seen_path   = "seen_ids.json"
     output_path = f"digests_{datetime.now().strftime('%Y%m%d_%H%M')}.json"
-    seen_ids = load_seen_ids(seen_path)
-    all_papers = []
+    seen_ids    = load_seen_ids(seen_path)
+    all_papers  = []
 
     # ── 1. Fetch from all sources ──
     print("📡 Fetching papers...\n")
 
-    # PubMed (sample 3 queries to keep rate limit friendly)
     import random
     sampled_queries = random.sample(SEARCH_QUERIES, min(4, len(SEARCH_QUERIES)))
-    for query in sampled_queries:
-        print(f"  PubMed: {query}")
-        papers = fetch_pubmed(query, max_results=2)
-        all_papers.extend(papers)
-        time.sleep(0.4)  # NCBI rate limit: 3 req/sec
 
-    # Semantic Scholar (2 queries)
-    for query in sampled_queries[:2]:
-        print(f"  SemanticScholar: {query}")
-        papers = fetch_semantic_scholar(query, max_results=2)
+    # OpenAlex (replaces PubMed + Semantic Scholar fetches)
+    for query in sampled_queries:
+        print(f"  OpenAlex: {query}")
+        papers = fetch_openalex(query, max_results=3)
         all_papers.extend(papers)
-        time.sleep(0.5)
+        time.sleep(1.0)  # OpenAlex polite crawling
+
+    # medRxiv recent preprints filtered by keywords
+    print(f"  medRxiv: last 14 days filtered by keywords...")
+    medrxiv_papers = fetch_medrxiv(max_results=15)
+    all_papers.extend(medrxiv_papers)
+    print(f"    → {len(medrxiv_papers)} relevant preprints")
 
     # ScienceDaily RSS
     print(f"  ScienceDaily RSS feeds...")
@@ -451,12 +551,23 @@ def run():
         print("Nothing new today. Run again tomorrow!")
         return
 
-    # ── 3. Digest with Claude ──
-    print("🧠 Digesting with Claude...\n")
-    good_digests = []
-    min_score = CONFIG.get("min_relevance_score", 6)
+    # ── 3. Legitimacy enrichment ──
+    print("🔍 Enriching with legitimacy signals...\n")
+    cap = CONFIG.get("max_papers_per_run", 10)
+    for paper in fresh_papers[:cap]:
+        print(f"  → {paper['title'][:65]}...")
+        enrich_legitimacy(paper)
+        h   = paper.get("h_index")
+        alt = paper.get("altmetric_score")
+        cit = paper.get("citations", 0)
+        print(f"     H-index: {h}  |  Citations: {cit}  |  Altmetric: {alt}")
 
-    for paper in fresh_papers[:CONFIG.get("max_papers_per_run", 10)]:
+    # ── 4. Digest with LLM ──
+    print("\n🧠 Digesting with LLM...\n")
+    good_digests = []
+    min_score    = CONFIG.get("min_relevance_score", 6)
+
+    for paper in fresh_papers[:cap]:
         print(f"  → {paper['title'][:70]}...")
         digest = digest_paper(paper)
         time.sleep(0.5)
@@ -481,11 +592,9 @@ def run():
         digest["desci"] = desci_result
         matches = desci_result.get("matches", [])
         if matches:
-            names = ", ".join(m["name"] for m in matches)
-            print(f"     🔗 Matched: {names}")
+            print(f"     🔗 Matched: {', '.join(m['name'] for m in matches)}")
         else:
-            reason = desci_result.get("no_match_reason", "no close match")
-            print(f"     ↳ No DeSci match ({reason})")
+            print(f"     ↳ No DeSci match ({desci_result.get('no_match_reason', 'no close match')})")
 
         time.sleep(0.3)
         good_digests.append(digest)
@@ -493,23 +602,19 @@ def run():
 
     print(f"\n  → {len(good_digests)} high-quality findings\n")
 
-    # ── 4. Send notifications ──
+    # ── 5. Send notifications ──
     if good_digests:
         print("📬 Sending notifications...\n")
         for digest in good_digests:
             if CONFIG.get("telegram_bot_token") and CONFIG.get("telegram_chat_id"):
-                send_telegram(
-                    digest,
-                    CONFIG["telegram_bot_token"],
-                    CONFIG["telegram_chat_id"],
-                )
+                send_telegram(digest, CONFIG["telegram_bot_token"], CONFIG["telegram_chat_id"])
                 time.sleep(1)
 
             if CONFIG.get("discord_webhook_url"):
                 send_discord(digest, CONFIG["discord_webhook_url"])
                 time.sleep(1)
 
-    # ── 5. Save output ──
+    # ── 6. Save output ──
     with open(output_path, "w") as f:
         json.dump(good_digests, f, indent=2)
     save_seen_ids(seen_ids, seen_path)
