@@ -66,13 +66,13 @@ def reconstruct_abstract(inverted_index: dict) -> str:
     return " ".join(positions[i] for i in sorted(positions))
 
 
-def _openalex_fetch_type(query: str, work_type: str, cutoff: str, max_results: int) -> list:
-    """Single OpenAlex request for one work type."""
+def fetch_openalex(query: str, max_results: int = 5) -> list[dict]:
+    """Fetch most recent works from OpenAlex by keyword search."""
     params = {
         "search": query,
-        "filter": f"publication_date:>{cutoff},type:{work_type}",
+        "filter": "cited_by_count:>2",
         "per-page": max_results,
-        "sort": "cited_by_count:desc",
+        "sort": "publication_date:desc",
         "select": "id,title,abstract_inverted_index,publication_date,doi,primary_location,cited_by_count,type",
     }
     headers = {"User-Agent": "SciSignal/1.0 (mailto:contact@scisignal.app)"}
@@ -83,23 +83,12 @@ def _openalex_fetch_type(query: str, work_type: str, cutoff: str, max_results: i
         data = r.json()
         results = data.get("results", [])
         if not results:
-            print(f"  OpenAlex 0 results for type={work_type} query='{query[:40]}'")
+            print(f"  OpenAlex 0 results for query='{query[:40]}'")
             print(f"  Full response: {json.dumps(data, indent=2)[:1000]}")
-        return results
     except Exception as e:
-        print(f"  OpenAlex error (type={work_type}, query='{query[:40]}'): {e}")
+        print(f"  OpenAlex error (query='{query[:40]}'): {e}")
         return []
 
-
-def fetch_openalex(query: str, max_results: int = 5) -> list[dict]:
-    """Fetch recent journal articles and preprints from OpenAlex by keyword."""
-    cutoff = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")
-
-    journal_results  = _openalex_fetch_type(query, "journal-article", cutoff, max_results)
-    time.sleep(0.5)
-    preprint_results = _openalex_fetch_type(query, "preprint", cutoff, max_results)
-
-    results = journal_results + preprint_results
     papers = []
     for work in results:
         abstract = reconstruct_abstract(work.get("abstract_inverted_index") or {})
@@ -263,9 +252,9 @@ def enrich_legitimacy(paper: dict) -> dict:
                     )
                     ar.raise_for_status()
                     h_index = ar.json().get("hIndex")
-                    time.sleep(0.4)
+                    time.sleep(2.0)
 
-        time.sleep(0.5)
+        time.sleep(2.0)
     except Exception as e:
         print(f"  Semantic Scholar enrichment error: {e}")
 
@@ -342,6 +331,7 @@ def digest_paper(paper: dict) -> Optional[dict]:
     )
 
     try:
+        print(f"  [digest_paper] API key prefix: {CONFIG['openrouter_api_key'][:10]}")
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={
@@ -538,12 +528,20 @@ def run():
     print(f"\n  → {len(all_papers)} total papers fetched")
 
     # ── 2. Deduplicate ──
+    import re as _re
+    def _norm_title(t: str) -> str:
+        return _re.sub(r'[^a-z0-9 ]', '', t.lower()).strip()
+
     fresh_papers = []
+    seen_titles: set[str] = set()
     for p in all_papers:
         uid = hashlib.md5(f"{p['id']}{p['title']}".encode()).hexdigest()
         p["_uid"] = uid
-        if uid not in seen_ids:
-            fresh_papers.append(p)
+        norm = _norm_title(p["title"])
+        if uid in seen_ids or norm in seen_titles:
+            continue
+        seen_titles.add(norm)
+        fresh_papers.append(p)
 
     print(f"  → {len(fresh_papers)} new (after dedup)\n")
 
