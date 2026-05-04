@@ -82,6 +82,7 @@ def match_desci_projects(
     )
 
     try:
+        print(f"  [match_desci_projects] API key prefix: {api_key[:10]}")
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={

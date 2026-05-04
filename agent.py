@@ -6,6 +6,7 @@ Output: Telegram message + Discord embed + saved JSON
 """
 
 import os
+import re
 import json
 import time
 import hashlib
@@ -365,6 +366,48 @@ def save_seen_ids(ids: set, path: str):
         json.dump(list(ids), f)
 
 
+# ─── GITHUB CODE SEARCH ──────────────────────────────────────────────────────
+
+def search_github_repos(title: str) -> list[dict]:
+    """Search GitHub for repos related to a paper title. No auth required (10 req/min)."""
+    keywords = " ".join(re.sub(r'[^a-zA-Z0-9 ]', '', title).split()[:5])
+    if not keywords.strip():
+        return []
+
+    six_months_ago = datetime.now() - timedelta(days=182)
+
+    try:
+        r = requests.get(
+            "https://api.github.com/search/repositories",
+            params={"q": keywords, "sort": "stars", "order": "desc", "per_page": 10},
+            headers={"Accept": "application/vnd.github.v3+json"},
+            timeout=10,
+        )
+        if r.status_code != 200:
+            return []
+
+        repos = []
+        for item in r.json().get("items", []):
+            if item.get("stargazers_count", 0) <= 10:
+                continue
+            pushed = item.get("pushed_at", "")
+            if pushed and datetime.strptime(pushed[:10], "%Y-%m-%d") < six_months_ago:
+                continue
+            repos.append({
+                "name":        item["full_name"],
+                "url":         item["html_url"],
+                "stars":       item["stargazers_count"],
+                "description": item.get("description") or "",
+                "license":     (item.get("license") or {}).get("spdx_id", ""),
+            })
+            if len(repos) == 3:
+                break
+        return repos
+    except Exception as e:
+        print(f"  GitHub search error: {e}")
+        return []
+
+
 # ─── TELEGRAM SENDER ─────────────────────────────────────────────────────────
 
 def html_escape(text: str) -> str:
@@ -398,6 +441,17 @@ def send_telegram(digest: dict, bot_token: str, chat_id: str):
     if d.get("desci", {}).get("matches"):
         desci_tags = "#DeSci #Web3Science #DecentralizedScience"
 
+    github_section = ""
+    repos = d.get("github_repos", [])
+    if repos:
+        lines = ["\n\n💻 <b>Related code:</b>"]
+        for repo in repos:
+            stars = repo["stars"]
+            stars_str = f"{stars / 1000:.1f}k" if stars >= 1000 else str(stars)
+            license_str = f" · {html_escape(repo['license'])}" if repo.get("license") else ""
+            lines.append(f"→ <a href=\"{html_escape(repo['url'])}\">{html_escape(repo['name'])}</a> ⭐ {stars_str}{license_str}")
+        github_section = "\n".join(lines)
+
     message = f"""{category_emoji} <b>{html_escape(d.get('category', 'Research'))}</b> {strength_emoji}
 
 {html_escape(d.get('social_caption', ''))}
@@ -405,7 +459,7 @@ def send_telegram(digest: dict, bot_token: str, chat_id: str):
 💡 <b>Tip:</b> {html_escape(d.get('actionable_tip', ''))}
 
 📊 Evidence: <i>{html_escape(d.get('evidence_strength', ''))}</i>
-🔗 <a href="{html_escape(p['url'])}">Read the study</a> • {html_escape(p['source'])} {html_escape(p['year'])}{desci_section}
+🔗 <a href="{html_escape(p['url'])}">Read the study</a> • {html_escape(p['source'])} {html_escape(p['year'])}{desci_section}{github_section}
 
 {hashtags} {desci_tags}""".strip()
 
@@ -576,6 +630,16 @@ def run():
             print(f"     🔗 Matched: {', '.join(m['name'] for m in matches)}")
         else:
             print(f"     ↳ No DeSci match ({desci_result.get('no_match_reason', 'no close match')})")
+
+        # GitHub code search
+        print(f"     💻 Searching GitHub for related repos...")
+        github_repos = search_github_repos(paper["title"])
+        digest["github_repos"] = github_repos
+        if github_repos:
+            print(f"     → {', '.join(r['name'] for r in github_repos)}")
+        else:
+            print(f"     ↳ No matching repos")
+        time.sleep(6)  # GitHub unauthenticated rate limit: 10 req/min
 
         time.sleep(0.3)
         good_digests.append(digest)
