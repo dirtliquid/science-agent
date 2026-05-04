@@ -430,8 +430,8 @@ def html_escape(text: str) -> str:
     return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def send_telegram(digest: dict, bot_token: str, chat_id: str):
-    """Format and send a digest as a Telegram message."""
+def build_telegram_message(digest: dict) -> str:
+    """Render the HTML message string for a digest."""
     p = digest["paper"]
     d = digest
 
@@ -470,7 +470,7 @@ def send_telegram(digest: dict, bot_token: str, chat_id: str):
             parts.append(f"<a href=\"{html_escape(repo['url'])}\">{html_escape(repo['name'])}</a> ⭐ {stars_str}")
         github_line = f"\n💻 <b>GitHub:</b> {' · '.join(parts)}"
 
-    message = f"""{category_emoji} <b>{html_escape(d.get('category', 'Research')).upper()}</b> · {strength_emoji}
+    return f"""{category_emoji} <b>{html_escape(d.get('category', 'Research')).upper()}</b> · {strength_emoji}
 
 📌 {html_escape(p.get('title', ''))}
 👥 {authors_line}
@@ -487,6 +487,11 @@ def send_telegram(digest: dict, bot_token: str, chat_id: str):
 📊 Evidence: <i>{html_escape(d.get('evidence_strength', ''))}</i>
 🔗 <a href="{html_escape(p.get('url', ''))}">Read study</a>{desci_line}{github_line}""".strip()
 
+
+def send_telegram(digest: dict, bot_token: str, chat_id: str):
+    """Send a digest as a Telegram message."""
+    p = digest["paper"]
+    message = build_telegram_message(digest)
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {
         "chat_id": chat_id,
@@ -554,7 +559,7 @@ def send_discord(digest: dict, webhook_url: str):
 
 # ─── MAIN PIPELINE ───────────────────────────────────────────────────────────
 
-def run():
+def run(preview: bool = False):
     print(f"\n{'='*60}")
     print(f"  Mental Health Science Agent — {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print(f"{'='*60}\n")
@@ -670,10 +675,18 @@ def run():
         time.sleep(0.3)
         good_digests.append(digest)
         seen_ids.add(paper["_uid"])
+        if preview:
+            break
 
     print(f"\n  → {len(good_digests)} high-quality findings\n")
 
-    # ── 5. Send notifications ──
+    # ── 5. Preview or send notifications ──
+    if preview and good_digests:
+        print(f"\n{'─' * 60}")
+        print(build_telegram_message(good_digests[0]))
+        print(f"{'─' * 60}\n")
+        return good_digests
+
     if good_digests:
         print("📬 Sending notifications...\n")
         for digest in good_digests:
@@ -697,4 +710,9 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--preview", action="store_true",
+                        help="Print the first digest to console instead of sending")
+    args = parser.parse_args()
+    run(preview=args.preview)
