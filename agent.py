@@ -74,7 +74,7 @@ def fetch_openalex(query: str, max_results: int = 5) -> list[dict]:
         "filter": "cited_by_count:>2",
         "per-page": max_results,
         "sort": "publication_date:desc",
-        "select": "id,title,abstract_inverted_index,publication_date,doi,primary_location,cited_by_count,type",
+        "select": "id,title,abstract_inverted_index,publication_date,doi,primary_location,cited_by_count,type,authorships",
     }
     headers = {"User-Agent": "SciSignal/1.0 (mailto:contact@scisignal.app)"}
 
@@ -120,16 +120,30 @@ def fetch_openalex(query: str, max_results: int = 5) -> list[dict]:
         url = primary.get("landing_page_url") or (f"https://doi.org/{doi}" if doi else "")
 
         pub_date = work.get("publication_date") or ""
+
+        authorships = work.get("authorships") or []
+        authors = ""
+        if authorships:
+            first = authorships[0]
+            name = (first.get("author") or {}).get("display_name", "")
+            insts = first.get("institutions") or []
+            inst = insts[0].get("display_name", "") if insts else ""
+            inst_str = f" ({inst})" if inst else ""
+            suffix = " et al." if len(authorships) > 1 else ""
+            authors = f"{name}{inst_str}{suffix}"
+
         papers.append({
-            "source": "OpenAlex",
-            "id": (work.get("id") or "").split("/")[-1],
-            "title": title_raw,
+            "source":   "OpenAlex",
+            "id":       (work.get("id") or "").split("/")[-1],
+            "title":    title_raw,
             "abstract": abstract[:3000],
-            "year": pub_date[:4],
-            "url": url,
-            "doi": doi,
+            "year":     pub_date[:4],
+            "pub_date": pub_date,
+            "authors":  authors,
+            "url":      url,
+            "doi":      doi,
             "citations": work.get("cited_by_count") or 0,
-            "query": query,
+            "query":    query,
         })
 
     return papers
@@ -290,7 +304,7 @@ Base your score on scientific quality and actionability (1–10), then apply adj
 
 Respond with this exact JSON structure:
 {{
-  "category": one of ["Food/Diet", "Exercise", "Therapy", "Nature", "Social", "Sleep", "App/Digital", "Substance", "Other"],
+  "category": one of ["Food/Diet", "Exercise", "Therapy", "Nature", "Social", "Sleep", "App/Digital", "Substance", "Neuroscience", "Longevity", "Mental Health", "Other"],
   "key_finding": "1-2 sentences. The actual finding in plain English. What works, for whom, how much.",
   "why_it_matters": "1 sentence. Why should a non-scientist care about this?",
   "actionable_tip": "1 sentence starting with a verb. What can someone actually DO with this info?",
@@ -339,12 +353,14 @@ def digest_paper(paper: dict) -> Optional[dict]:
         raw = raw.replace("```json", "").replace("```", "").strip()
         digest = json.loads(raw)
         digest["paper"] = {
-            "title"    : paper["title"],
-            "source"   : paper["source"],
-            "url"      : paper["url"],
-            "year"     : paper.get("year", ""),
+            "title"   : paper["title"],
+            "source"  : paper["source"],
+            "url"     : paper["url"],
+            "year"    : paper.get("year", ""),
+            "pub_date": paper.get("pub_date", paper.get("year", "")),
+            "authors" : paper.get("authors", ""),
             "citations": paper.get("citations"),
-            "doi"      : paper.get("doi"),
+            "doi"     : paper.get("doi"),
         }
         return digest
     except Exception as e:
@@ -428,40 +444,48 @@ def send_telegram(digest: dict, bot_token: str, chat_id: str):
     category_emoji = {
         "Food/Diet": "🥗", "Exercise": "🏃", "Therapy": "🧠",
         "Nature": "🌿", "Social": "👥", "Sleep": "😴",
-        "App/Digital": "📱", "Substance": "💊", "Other": "📌",
+        "App/Digital": "📱", "Substance": "💊",
+        "Neuroscience": "🧬", "Longevity": "⏳", "Mental Health": "💙",
+        "Other": "📌",
     }.get(d.get("category", "Other"), "📌")
 
-    hashtags = " ".join(f"#{html_escape(h)}" for h in d.get("hashtags", []))
+    authors_line = html_escape(p.get("authors") or p.get("source", ""))
 
-    desci_section = ""
-    if d.get("desci"):
-        desci_section = format_desci_section_telegram(d["desci"])
+    desci_line = ""
+    matches = d.get("desci", {}).get("matches", [])
+    if matches:
+        lines = ["🔬 <b>Related DeSci Projects:</b>"]
+        for m in matches:
+            url = html_escape(m.get("website", ""))
+            lines.append(f"→ {html_escape(m['name'])} ({url})")
+        desci_line = "\n" + "\n".join(lines)
 
-    desci_tags = ""
-    if d.get("desci", {}).get("matches"):
-        desci_tags = "#DeSci #Web3Science #DecentralizedScience"
-
-    github_section = ""
+    github_line = ""
     repos = d.get("github_repos", [])
     if repos:
-        lines = ["\n\n💻 <b>Related code:</b>"]
+        parts = []
         for repo in repos:
             stars = repo["stars"]
             stars_str = f"{stars / 1000:.1f}k" if stars >= 1000 else str(stars)
-            license_str = f" · {html_escape(repo['license'])}" if repo.get("license") else ""
-            lines.append(f"→ <a href=\"{html_escape(repo['url'])}\">{html_escape(repo['name'])}</a> ⭐ {stars_str}{license_str}")
-        github_section = "\n".join(lines)
+            parts.append(f"<a href=\"{html_escape(repo['url'])}\">{html_escape(repo['name'])}</a> ⭐ {stars_str}")
+        github_line = f"\n💻 <b>GitHub:</b> {' · '.join(parts)}"
 
-    message = f"""{category_emoji} <b>{html_escape(d.get('category', 'Research'))}</b> {strength_emoji}
+    message = f"""{category_emoji} <b>{html_escape(d.get('category', 'Research')).upper()}</b> · {strength_emoji}
 
+📌 {html_escape(p.get('title', ''))}
+👥 {authors_line}
+📅 {html_escape(p.get('pub_date') or p.get('year', ''))} · {html_escape(p.get('source', ''))}
+
+🔍 <b>Summary:</b>
+{html_escape(d.get('key_finding', ''))}
+
+💡 {html_escape(d.get('actionable_tip', ''))}
+
+🤖 <b>AI Analysis:</b>
 {html_escape(d.get('social_caption', ''))}
 
-💡 <b>Tip:</b> {html_escape(d.get('actionable_tip', ''))}
-
 📊 Evidence: <i>{html_escape(d.get('evidence_strength', ''))}</i>
-🔗 <a href="{html_escape(p['url'])}">Read the study</a> • {html_escape(p['source'])} {html_escape(p['year'])}{desci_section}{github_section}
-
-{hashtags} {desci_tags}""".strip()
+🔗 <a href="{html_escape(p.get('url', ''))}">Read study</a>{desci_line}{github_line}""".strip()
 
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {
@@ -490,7 +514,9 @@ def send_discord(digest: dict, webhook_url: str):
     category_emoji = {
         "Food/Diet": "🥗", "Exercise": "🏃", "Therapy": "🧠",
         "Nature": "🌿", "Social": "👥", "Sleep": "😴",
-        "App/Digital": "📱", "Substance": "💊", "Other": "📌",
+        "App/Digital": "📱", "Substance": "💊",
+        "Neuroscience": "🧬", "Longevity": "⏳", "Mental Health": "💙",
+        "Other": "📌",
     }.get(d.get("category", "Other"), "📌")
 
     hashtags  = " ".join(f"#{h}" for h in d.get("hashtags", []))

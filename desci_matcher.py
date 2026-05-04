@@ -137,16 +137,12 @@ def format_desci_section_telegram(match_result: dict) -> str:
     if not matches:
         return ""
 
-    lines = ["\n🔬 <b>DeSci Projects On This:</b>"]
+    lines = ["🔬 <b>Related DeSci Projects:</b>"]
     for m in matches:
-        strength_badge = "🔥" if m["match_strength"] == "Strong" else "🔗"
-        token_str = f" <code>${_html_escape(m['token'])}</code>" if m.get("token") else ""
-        lines.append(
-            f"{strength_badge} <b>{_html_escape(m['name'])}</b>{token_str} — {_html_escape(m['relevance'])}\n"
-            f"   🌐 <a href=\"{_html_escape(m['website'])}\">Website</a> | 𝕏 {_html_escape(m['twitter'])}"
-        )
+        url = _html_escape(m.get("website", ""))
+        lines.append(f"→ {_html_escape(m['name'])} ({url})")
 
-    return "\n".join(lines)
+    return "\n" + "\n".join(lines)
 
 
 def format_desci_section_discord(match_result: dict) -> list[dict]:
