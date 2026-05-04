@@ -2,7 +2,7 @@ name: Science Agent
 
 on:
   schedule:
-    - cron: '0 1 * * *'  # 1am UTC = 8am Jakarta (WIB, UTC+7)
+    - cron: '0 2 * * *'  # 2am UTC = 9am Jakarta (WIB, UTC+7)
   workflow_dispatch:      # allow manual runs from the Actions tab
 
 jobs:
