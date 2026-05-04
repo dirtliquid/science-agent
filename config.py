@@ -1,22 +1,24 @@
 """
 Configuration for Mental Health Science Agent.
-Fill in values directly OR set as environment variables (for GitHub Actions / Railway).
-Env vars take priority over hardcoded values — so the same file works locally and in CI.
+Secrets are loaded from .env locally; in CI set them as environment variables.
 """
 
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 CONFIG = {
     # ── OpenRouter ────────────────────────────────────────────
     # Get yours at: https://openrouter.ai/keys
-    "openrouter_api_key": os.getenv("OPENROUTER_API_KEY", "YOUR_OPENROUTER_KEY_HERE"),
+    "openrouter_api_key": os.getenv("OPENROUTER_API_KEY"),
 
     # ── Telegram ───────────────────────────────────────────────
     # 1. Message @BotFather on Telegram → /newbot → copy token
     # 2. Add bot to your channel as admin
     # 3. Set chat_id to "@your_channel_name" or the numeric ID
-    "telegram_bot_token": os.getenv("TELEGRAM_BOT_TOKEN", "8764984262:AAECjVJtBZs0QxrGhyMouMU-V1znpk3vx0Q"),
-    "telegram_chat_id":   os.getenv("TELEGRAM_CHAT_ID", "2085012164"),
+    "telegram_bot_token": os.getenv("TELEGRAM_BOT_TOKEN"),
+    "telegram_chat_id":   os.getenv("TELEGRAM_CHAT_ID"),
 
     # ── Discord ────────────────────────────────────────────────
     # Channel Settings → Integrations → Webhooks → New Webhook → Copy URL
