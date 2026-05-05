@@ -691,7 +691,9 @@ def run(preview: bool = False):
         print("📬 Sending notifications...\n")
         for digest in good_digests:
             if CONFIG.get("telegram_bot_token") and CONFIG.get("telegram_chat_id"):
-                print(f"Sending to chat_id: {CONFIG['telegram_chat_id']}")
+                print(f"  [DEBUG] telegram_bot_token set: {bool(CONFIG.get('telegram_bot_token'))}")
+                print(f"  [DEBUG] telegram_chat_id: {CONFIG.get('telegram_chat_id')}")
+                print(f"  [DEBUG] message:\n{build_telegram_message(digest)}\n")
                 send_telegram(digest, CONFIG["telegram_bot_token"], CONFIG["telegram_chat_id"])
                 time.sleep(1)
 
