@@ -18,7 +18,7 @@ CONFIG = {
     # 2. Add bot to your channel as admin
     # 3. Set chat_id to "@your_channel_name" or the numeric ID
     "telegram_bot_token": os.getenv("TELEGRAM_BOT_TOKEN"),
-    "telegram_chat_id":   os.getenv("TELEGRAM_CHAT_ID"),
+    "telegram_chat_id":   os.getenv("TELEGRAM_CHAT_ID", "2085012164"),
 
     # ── Discord ────────────────────────────────────────────────
     # Channel Settings → Integrations → Webhooks → New Webhook → Copy URL
