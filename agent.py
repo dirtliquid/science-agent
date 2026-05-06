@@ -485,7 +485,9 @@ def build_telegram_message(digest: dict) -> str:
 {html_escape(d.get('social_caption', ''))}
 
 📊 Evidence: <i>{html_escape(d.get('evidence_strength', ''))}</i>
-🔗 <a href="{html_escape(p.get('url', ''))}">Read study</a>{desci_line}{github_line}""".strip()
+🔗 <a href="{html_escape(p.get('url', ''))}">Read study</a>{desci_line}{github_line}
+
+<i>Sent by SciSignal Research Agent</i>""".strip()
 
 
 def send_telegram(digest: dict, bot_token: str, chat_id: str):
