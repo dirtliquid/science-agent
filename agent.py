@@ -259,7 +259,7 @@ def enrich_legitimacy(paper: dict) -> dict:
     # ── Altmetric: attention score ──
     if doi:
         try:
-            r = requests.get(f"{ALTMETRIC_URL}/{doi}", timeout=10)
+            r = requests.get(f"{ALTMETRIC_URL}/{doi}", timeout=5)
             if r.status_code == 200:
                 altmetric_score = r.json().get("score")
             time.sleep(0.3)
@@ -670,7 +670,7 @@ def run(preview: bool = False):
             print(f"     → {', '.join(r['name'] for r in github_repos)}")
         else:
             print(f"     ↳ No matching repos")
-        time.sleep(6)  # GitHub unauthenticated rate limit: 10 req/min
+        time.sleep(1)
 
         time.sleep(0.3)
         good_digests.append(digest)
@@ -691,7 +691,6 @@ def run(preview: bool = False):
         print("📬 Sending notifications...\n")
         bot_token = os.environ.get("TELEGRAM_BOT_TOKEN") or CONFIG.get("telegram_bot_token")
         chat_id   = os.environ.get("TELEGRAM_CHAT_ID") or CONFIG.get("telegram_chat_id") or "2085012164"
-        print(f"  token set: {bool(bot_token)}, chat_id: {chat_id}")
         for digest in good_digests:
             if bot_token and chat_id:
                 send_telegram(digest, bot_token, chat_id)
